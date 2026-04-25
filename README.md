@@ -23,7 +23,11 @@
   1. 特征提取模式：冻结骨干网络全部卷积层与残差块参数，仅替换并训练末端分类头，全程固定通用特征提取能力，仅适配目标数据集类别分布，适合极小样本场景、快速迭代场景；
   2. 分层微调模式：可以自由冻结和解冻任意位置的卷积层或者全部解冻。我们在这里尝试，冻结网络浅层基础卷积层，**仅解冻训练网络最后一层残差块/卷积模块 + 末端分类头**，在保留通用底层特征的基础上，小幅修正高层语义特征，适配目标数据集差异化特征，兼顾泛化能力与任务适配性，也是本次实验采用的核心方案。
 
+
+<img width="714" height="433" alt="image" src="https://github.com/user-attachments/assets/f191c009-c1d2-4e91-aef9-e7c673211f71" />
+
 该范式规避了深层网络随机训练易梯度消失、过拟合的缺陷，以极小训练代价完成模型收敛，是后续轻量化模型训练、跨域图像分类、小数据场景建模的关键基础技术。
+
 
 ## 实验适配说明
 本次实验选用ResNet18作为基础骨干网络，放弃样本充足的CIFAR-10数据集，改用**蚂蚁&蜜蜂细粒度小样本数据集**，最大化凸显迁移学习的应用价值。
@@ -57,6 +61,9 @@ Different from the full learning mode of training from scratch, transfer learnin
 - **Target Task Adaptation and Hierarchical Training**: Two classic transfer strategies are defined according to the scale of target datasets and task differences to adapt to downstream classification tasks:
   1. Feature Extraction Mode: Freeze all convolutional layers and residual block parameters of the backbone network, only replacing and training the final classification head. The universal feature extraction capability is fixed throughout the process to adapt only to the category distribution of target datasets, suitable for extremely few-shot scenarios and rapid iteration tasks.
   2. Hierarchical Fine-tuning Mode: Freeze or unfreeze convolutional layers at any position or all layers freely. In this experiment, shallow basic convolutional layers of the network are frozen, and **only the last residual block/convolutional module and the final classification head are unfrozen and trained**. While retaining universal low-level features, high-level semantic features are slightly adjusted to adapt to differentiated features of target datasets, balancing generalization ability and task adaptability. This serves as the core strategy adopted in this experiment.
+
+<img width="745" height="446" alt="image" src="https://github.com/user-attachments/assets/843f4d7e-508a-4289-a66c-bf26a5f8061b" />
+
 
 This paradigm avoids the defects of gradient vanishing and overfitting caused by random training of deep networks, and achieves model convergence at a low training cost. It acts as a fundamental technology for lightweight model training, cross-domain image classification and modeling in small-data scenarios.
 
