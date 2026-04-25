@@ -1,10 +1,14 @@
-# 迁移学习
+# 迁移学习|Transfer Learning
 基于 PyTorch 实现的 ResNet 迁移学习图像分类，包含 **特征提取** 和 **微调** 两种模式。
-# Transfer Learning
 ### 选择语言 | Language
 [中文简介](#简介) | [English](#Introduction)
 
 ### 结果 | Result
+- Train only the classification layer:
+<img width="2480" height="1914" alt="resnet_only_fc_curve" src="https://github.com/user-attachments/assets/8e92568d-e6bc-4d0c-9a8f-7a142b9a8f69" />
+
+- Train only the high-dimensional semantic and classification layers:
+<img width="2480" height="1914" alt="resnet_transfer_curve" src="https://github.com/user-attachments/assets/18751230-c629-452c-9c57-dcf7cf0afa82" />
 
 ---
 
@@ -22,56 +26,61 @@
 该范式规避了深层网络随机训练易梯度消失、过拟合的缺陷，以极小训练代价完成模型收敛，是后续轻量化模型训练、跨域图像分类、小数据场景建模的关键基础技术。
 
 ## 实验适配说明
-本次实验基于**ResNet骨干网络**实现迁移学习，下游任务数据集选用CIFAR-10，包含10类通用物体彩色图像，图片尺寸为32×32。
-原预训练权重基于ImageNet 224×224高清图像训练，因此实验中对输入图像做尺寸适配、标准化归一化处理；同时严格遵循迁移学习分层训练规则：冻结ResNet浅层layer1~layer3全部参数，仅开放最后一层layer4残差块与全连接分类头的参数更新，在保留预训练通用特征的前提下，适配CIFAR-10低分辨率、小尺寸图像特性，核心迁移学习逻辑与分层微调架构完全保留。
+本次实验选用ResNet18作为基础骨干网络，放弃样本充足的CIFAR-10数据集，改用**蚂蚁&蜜蜂细粒度小样本数据集**，最大化凸显迁移学习的应用价值。
+源域预训练权重基于ImageNet 224×224标准图像训练，因此实验统一将输入图像缩放归一化至224×224尺寸，匹配预训练网络输入规范。
+实验设置两组对照训练：第一组固定全部骨干权重，仅训练分类头；第二组冻结浅层layer1~layer3，仅开放layer4最后残差块与分类头参数更新。依托少量数百张训练图像，对比两种迁移策略的收敛速度、训练损失与验证准确率，直观证明预训练特征迁移对小样本分类任务的显著提升效果。
 
 ## 数据集
-迁移学习的核心是跨数据集知识迁移，本次实验涉及**源域预训练数据集ImageNet**与**目标域任务数据集CIFAR-10**两个标准数据集，分别承担通用特征学习与下游任务验证的角色：
+本次迁移学习实验采用**源域通用大数据集 ImageNet** 与 **目标域小样本数据集 Ants & Bees** 双数据集组合，形成大小数据跨域知识迁移，精准体现迁移学习核心优势：
 
 ### 源域数据集：ImageNet
-ImageNet是计算机视觉领域最具影响力的大规模通用图像数据集，由斯坦福大学李飞飞团队于2009年发布，是目前迁移学习预训练的黄金标准数据集。数据集包含超过1400万张标注彩色图像，覆盖1000个基础物体类别，涵盖动物、植物、交通工具、日常用品等几乎所有常见视觉概念，类别分布均衡且场景丰富。
-其庞大的数据量与全面的类别覆盖，能够让模型学习到具有强普适性的底层视觉特征（边缘、纹理、形状）与高层语义特征，是ResNet等经典CNN骨干网络预训练的标准数据集。本次实验使用的ResNet-18预训练权重，正是基于ImageNet 1000类分类任务完整训练得到。
+ImageNet 是计算机视觉领域公认的大型基准预训练数据集，由斯坦福大学团队构建，包含超1400万张多类RGB标注图像，涵盖1000种不同物体类别，覆盖动物、植物、交通工具、生活用品等丰富自然场景。
+凭借海量且多样化的样本分布，ResNet在该数据集训练后，可稳定提取边缘、纹理、色彩、形状等通用基础特征，特征泛化能力强、可迁移性高，是目前所有主流CNN模型预训练的标准数据源，本实验所用ResNet18权重均基于该数据集训练得到。
 
-### 目标域数据集：CIFAR-10
-本次迁移学习下游任务采用CIFAR-10数据集，是轻量化通用物体分类标准数据集，由Alex Krizhevsky、Vinod Nair与Geoffrey Hinton整理发布。数据集由60000张32×32像素RGB彩色图像组成，涵盖飞机、汽车、鸟类、猫、鹿、狗、蛙类、马、船、卡车共10个互斥基础类别，每个类别包含6000张图像。
-数据集划分为50000张训练集与10000张测试集，数据量规模适中，图像分辨率低且包含一定噪声与姿态变化，适合验证迁移学习在中小规模数据集上的优化效果。
-数据集链接为：https://www.cs.toronto.edu/~kriz/cifar.html
+### 目标域数据集：Ants & Bees
+为贴合小样本真实应用场景，实验采用迁移学习经典标准数据集 Ants & Bees，仅包含**蚂蚁、蜜蜂**两个高度相似类别，分类难度高、样本总量极少。
+数据集整体仅包含398张图像，其中训练集245张、验证集153张，依靠数百张极小体量样本完成模型训练。在该数据条件下，从零初始化训练会发生严重过拟合，模型完全无法正常分类；而借助迁移学习策略，依托ImageNet预训练知识，模型可快速拟合小众细粒度特征，实现高精度分类。
+数据集开源地址：https://download.pytorch.org/tutorial/hymenoptera_data.zip
 
-数据集采用二进制压缩存储，减少冗余体积，无需额外转换为高清图片格式；本实验聚焦迁移学习算法与网络微调策略，不做数据集底层存储格式解析，专注模型迁移与特征复用的实验验证。
+数据集采用标准文件夹分类存储，结构简洁、无需格式转换，适合小样本迁移学习算法验证与对比实验。
 
 ---
 
 
-## Introduction
-Transfer learning is a core learning paradigm in the fields of machine learning and deep learning. Its theoretical system was systematically established by Qiang Yang’s team. It aims to transfer and reuse the general features and prior knowledge learned by pre-trained models in the source domain to target domain tasks, breaking the limitations of traditional deep learning models trained from scratch. Traditional CNN models require complete training with random initialization based on large-scale data, which suffers from difficult convergence with small samples, high training costs, weak generalization ability and large computing power consumption. Relying on backbone networks pre-trained on large-scale general datasets such as ImageNet, transfer learning realizes cross-task and cross-dataset knowledge transfer through the universality of low-level visual features, greatly reducing data dependence and training thresholds for downstream tasks. In computer vision tasks such as image classification and object detection, transfer learning has become a mainstream solution for industry and academic research, widely adapting to classic CNN architectures such as VGG, ResNet and AlexNet, and greatly promoting the implementation of small-sample visual tasks, lightweight model deployment and cross-scene visual applications.
+# Introduction
+Transfer learning is a core learning paradigm in machine learning and deep learning. Its core concept derives from the generalization theory of traditional machine learning, and its formal theoretical system was systematically established by Yang Qiang’s research team. It aims to **transfer and reuse universal features and prior knowledge learned by pre-trained models in the source domain to downstream tasks in the target domain**, breaking the limitations of training traditional deep learning models from scratch. Traditional CNN models require full training with randomly initialized weights based on large-scale datasets, suffering from difficulties in convergence with limited samples, high training costs, weak generalization ability and massive computing resource consumption. In contrast, transfer learning leverages backbone networks pre-trained on large-scale universal datasets such as ImageNet. Relying on the universality of low-level visual features, it realizes cross-task and cross-dataset knowledge transfer, greatly reducing data dependence and training thresholds for downstream tasks. In computer vision tasks including image classification and object detection, transfer learning has become a mainstream solution in both industry and academic research. It is widely compatible with classic CNN architectures such as VGG, ResNet and AlexNet, significantly promoting the implementation of few-shot image tasks, lightweight model deployment and cross-scenario visual applications.
 
-## Core Principles and Architecture Logic
-Different from the complete training mode from scratch, transfer learning is centered on two core logics: **feature reuse and selective parameter updating**, forming a standardized application paradigm with CNN visual models as the carrier. It is divided into three major processes: source domain pre-training, parameter transfer, and target task fine-tuning:
-- **Source Domain Pre-training Stage**: The backbone network is fully trained on large-scale general datasets with sufficient data and rich categories (such as ImageNet 1000 classes). The model automatically learns general low-level visual features such as edges, textures, contours, colors and local semantics. These features are highly universal and not limited to a single specific task.
-- **Parameter Transfer Loading**: Load the complete weights of the pre-trained backbone network to replace randomly initialized parameters. Compared with random weights, pre-trained weights come with mature visual extraction capabilities, which can quickly adapt to downstream image tasks and avoid repeated learning of shallow features.
-- **Target Task Adaptation and Layered Training**: Two classic transfer strategies are divided according to the scale of the target dataset and task differences to adapt to downstream classification tasks:
-  1. Feature Extraction Mode: Freeze all convolutional layers and residual block parameters of the backbone network, only replace and train the final classification head, fix the general feature extraction capability throughout the whole process, and only adapt to the category distribution of the target dataset, suitable for small sample scenarios and rapid iteration scenarios;
-  2. Layered Fine-tuning Mode: Freeze the shallow basic convolution layers of the network, only unfreeze and train the last residual block/convolution module and the final classification head of the network. On the premise of retaining general low-level features, slightly modify high-level semantic features to adapt to differentiated features of the target dataset, balancing generalization ability and task adaptability, which is also the core scheme adopted in this experiment.
+# Core Principles and Architectural Logic
+Different from the full learning mode of training from scratch, transfer learning centers on two core logics: **feature reuse and selective parameter updating**. With CNN visual models as the carrier, it forms a standardized application paradigm, consisting of three major processes: source domain pre-training, parameter transfer and target task fine-tuning.
+- **Source Domain Pre-training**: The backbone network is fully trained on large-scale universal datasets with sufficient data volume and rich categories (e.g., ImageNet with 1,000 classes). The model automatically learns universal low-level visual features such as edges, textures, contours, colors and local semantics. These features possess strong universality and are not limited to a single specific task.
+- **Parameter Transfer Loading**: Load the complete weights of the pre-trained backbone network to replace randomly initialized parameters. Compared with random weights, pre-trained weights come with mature visual feature extraction capabilities, enabling rapid adaptation to downstream image tasks and avoiding repeated learning of shallow features.
+- **Target Task Adaptation and Hierarchical Training**: Two classic transfer strategies are defined according to the scale of target datasets and task differences to adapt to downstream classification tasks:
+  1. Feature Extraction Mode: Freeze all convolutional layers and residual block parameters of the backbone network, only replacing and training the final classification head. The universal feature extraction capability is fixed throughout the process to adapt only to the category distribution of target datasets, suitable for extremely few-shot scenarios and rapid iteration tasks.
+  2. Hierarchical Fine-tuning Mode: Freeze or unfreeze convolutional layers at any position or all layers freely. In this experiment, shallow basic convolutional layers of the network are frozen, and **only the last residual block/convolutional module and the final classification head are unfrozen and trained**. While retaining universal low-level features, high-level semantic features are slightly adjusted to adapt to differentiated features of target datasets, balancing generalization ability and task adaptability. This serves as the core strategy adopted in this experiment.
 
-This paradigm avoids the defects of gradient disappearance and overfitting caused by random training of deep networks, and completes model convergence at a very low training cost. It is a key basic technology for subsequent lightweight model training, cross-domain image classification and small data scenario modeling.
+This paradigm avoids the defects of gradient vanishing and overfitting caused by random training of deep networks, and achieves model convergence at a low training cost. It acts as a fundamental technology for lightweight model training, cross-domain image classification and modeling in small-data scenarios.
 
-## Experimental Adaptation Note
-In this experiment, transfer learning is implemented based on the ResNet backbone network, and the downstream task dataset is CIFAR-10, which contains 10 categories of general object color images with an image size of 32×32.
-The original pre-trained weights are trained based on 224×224 high-definition images in ImageNet. Therefore, input image size adaptation and standardized normalization are performed in the experiment. At the same time, strictly follow the layered training rules of transfer learning: freeze all parameters of ResNet shallow layer1~layer3, and only open the parameter update of the last layer4 residual block and the fully connected classification head. While retaining the pre-trained general features, it adapts to the characteristics of low-resolution and small-size images in CIFAR-10. The core transfer learning logic and layered fine-tuning architecture are completely retained.
+# Experimental Adaptation Description
+This experiment adopts ResNet18 as the basic backbone network. Instead of the well-sampled CIFAR-10 dataset, the **fine-grained few-shot Ants & Bees dataset** is adopted to fully highlight the application value of transfer learning.
+The source domain pre-trained weights are trained on standard 224×224 images from ImageNet. Therefore, all input images in the experiment are uniformly resized and normalized to 224×224 to match the input specifications of the pre-trained network.
 
-## Dataset
-The core of transfer learning is cross-dataset knowledge transfer. This experiment involves two standard datasets: **the source domain pre-training dataset ImageNet** and **the target domain task dataset CIFAR-10**, which respectively undertake the roles of general feature learning and downstream task verification:
+Two groups of comparative training are set up in the experiment: the first group fixes all backbone weights and only trains the classification head; the second group freezes shallow layers from layer1 to layer3, and only enables parameter updating for the last residual block of layer4 and the classification head. With only hundreds of training images, the convergence speed, training loss and validation accuracy of the two transfer strategies are compared to intuitively verify the significant improvement of pre-trained feature transfer on few-shot classification tasks.
 
-### Source Domain Dataset: ImageNet
-ImageNet is the most influential large-scale general image dataset in the field of computer vision, released by Fei-Fei Li's team at Stanford University in 2009. It is the gold standard dataset for transfer learning pre-training. The dataset contains more than 14 million annotated color images, covering 1000 basic object categories including almost all common visual concepts such as animals, plants, vehicles and daily necessities, with balanced category distribution and rich scenes.
-Its huge data volume and comprehensive category coverage enable the model to learn highly universal low-level visual features (edges, textures, shapes) and high-level semantic features, making it the standard dataset for pre-training classic CNN backbones such as ResNet. The ResNet-18 pre-trained weights used in this experiment are obtained from complete training on the ImageNet 1000-class classification task.
+# Datasets
+This transfer learning experiment adopts a dual-dataset combination of **ImageNet (large-scale universal source domain dataset)** and **Ants & Bees (small-sample target domain dataset)**, realizing cross-domain knowledge transfer between large and small datasets and accurately reflecting the core advantages of transfer learning.
 
-### Target Domain Dataset: CIFAR-10
-The downstream task of this transfer learning experiment uses the CIFAR-10 dataset, a standard lightweight general object classification dataset compiled by Alex Krizhevsky, Vinod Nair and Geoffrey Hinton. It consists of 60,000 32×32 pixel RGB color images, covering 10 mutually exclusive basic categories: airplane, automobile, bird, cat, deer, dog, frog, horse, ship and truck, with 6000 images per category.
-The dataset is divided into 50,000 training images and 10,000 test images. With a moderate data scale, low image resolution and certain noise and pose variations, it is suitable for verifying the optimization effect of transfer learning on medium and small-scale datasets.
-The dataset link is: https://www.cs.toronto.edu/~kriz/cifar.html
+## Source Domain Dataset: ImageNet
+As a recognized large-scale benchmark pre-training dataset in computer vision, ImageNet was constructed by Stanford University. It contains over 14 million labeled RGB images covering 1,000 object categories, including animals, plants, transportation vehicles, daily necessities and various natural scenes.
+Benefiting from its massive and diversified sample distribution, ResNet trained on this dataset can stably extract universal basic features such as edges, textures, colors and shapes with strong generalization and high transferability. It is the standard data source for pre-training all mainstream CNN models at present, and the ResNet18 weights used in this experiment are all derived from training on this dataset.
 
-The dataset is stored in binary compression to reduce redundant volume, and there is no need for additional conversion to high-definition image formats. This experiment focuses on transfer learning algorithms and network fine-tuning strategies, does not analyze the underlying storage format of the dataset, and focuses on the experimental verification of model transfer and feature reuse.
+## Target Domain Dataset: Ants & Bees
+To fit the real-world few-shot application scenarios, this experiment adopts Ants & Bees, a classic standard dataset for transfer learning. It contains only two highly similar categories: ants and bees, with high classification difficulty and an extremely small total sample size.
+The dataset includes merely 398 images in total, with 245 images in the training set and 153 in the validation set. Model training is completed with only hundreds of samples. Under such data conditions, training with randomly initialized weights from scratch will lead to severe overfitting and failure in normal classification. In contrast, with transfer learning and prior knowledge pre-trained on ImageNet, the model can quickly fit fine-grained features of niche categories and achieve high-precision classification.
+
+Dataset open-source link: https://download.pytorch.org/tutorial/hymenoptera_data.zip
+
+The dataset adopts a standard folder-based classified storage structure with a concise format and no conversion required, making it suitable for algorithm verification and comparative experiments on few-shot transfer learning.
+
 
 ---
 ## 原文章 | Original article
